@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Case Created Notification Preview</title>
+<style>
+  :root { font-family: "Segoe UI", Arial, sans-serif; color: #242424; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: #f5f6f8; padding: 24px; }
+  .demo { max-width: 760px; margin: 30px auto; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 8px 28px #00000012; }
+  .demo h1 { margin: 0 0 8px; font-size: 22px; }
+  .demo p { color: #606770; line-height: 1.5; }
+  .preview-button { border: 0; border-radius: 8px; background: #0f6cbd; color: white; padding: 10px 16px; font-size: 14px; cursor: pointer; }
+  #caseToast {
+    position: fixed; top: 24px; right: 24px; z-index: 9999;
+    width: min(450px, calc(100vw - 32px)); padding: 18px 20px;
+    display: flex; align-items: flex-start; gap: 12px;
+    background: #fff; border-radius: 18px; border-left: 4px solid #22a06b;
+    box-shadow: 0 12px 36px rgba(20, 30, 45, .18);
+    opacity: 0; transform: translateX(24px); pointer-events: none;
+  }
+  #caseToast.show { pointer-events: auto; animation: toastIn .35s cubic-bezier(.2,.8,.2,1) forwards; }
+  #caseToast.hide { animation: toastOut .28s ease-in forwards; }
+  .success-icon { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 50%; background: #e5f5eb; color: #16834a; display: grid; place-items: center; font-weight: 800; font-size: 17px; }
+  .message { flex: 1; min-width: 0; }
+  .title { font-weight: 650; font-size: 18px; line-height: 1.3; margin: 1px 0 7px; }
+  .body-text { font-size: 15px; line-height: 1.45; color: #41464d; }
+  .close { background: transparent; border: 0; color: #777; cursor: pointer; font-size: 22px; line-height: 1; padding: 0 0 0 5px; }
+  .status { margin-top: 12px; display: flex; justify-content: flex-end; }
+  .pill { border-radius: 999px; padding: 5px 11px; background: #d8f3e2; color: #167447; font-size: 13px; font-weight: 650; }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes toastOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(24px); } }
+  @media (prefers-reduced-motion: reduce) { #caseToast.show, #caseToast.hide { animation: none; opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+  <div id="caseToast" role="status" aria-live="polite">
+    <div class="success-icon" aria-hidden="true">✓</div>
+    <div class="message">
+      <div class="title" id="toastTitle">Case Created</div>
+      <div class="body-text" id="toastBody">New Case has been created successfully.</div>
+      <div class="status"><span class="pill">Success</span></div>
+    </div>
+    <button class="close" id="toastClose" aria-label="Close notification">×</button>
+  </div>
+
+  <main class="demo">
+    <h1>Case notification preview</h1>
+    <p>This is a standalone visual preview of the top-right toast. Select the button to replay the animation.</p>
+    <button class="preview-button" id="showAgain">Preview notification</button>
+  </main>
+<script>
+(function () {
+  const toast = document.getElementById("caseToast");
+  let hideTimer;
+  function showCaseToast(title, message) {
+    document.getElementById("toastTitle").textContent = title || "Case Created";
+    document.getElementById("toastBody").textContent = message || "New Case has been created successfully.";
+    clearTimeout(hideTimer);
+    toast.classList.remove("hide", "show");
+    void toast.offsetWidth;
+    toast.classList.add("show");
+    hideTimer = setTimeout(() => {
+      toast.classList.remove("show");
+      toast.classList.add("hide");
+    }, 5000);
+  }
+  document.getElementById("toastClose").addEventListener("click", () => {
+    clearTimeout(hideTimer);
+    toast.classList.remove("show");
+    toast.classList.add("hide");
+  });
+  document.getElementById("showAgain").addEventListener("click", () => showCaseToast());
+  // Preview only: show once on opening the standalone HTML file.
+  showCaseToast();
+  // Expose helper if this HTML is hosted in a controlled custom-page solution.
+  window.showCaseToast = showCaseToast;
+})();
+</script>
+</body>
+</html>

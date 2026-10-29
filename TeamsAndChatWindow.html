@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat Assistant</title>
+    <!-- Include Marked.js to render Markdown formatting nicely -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        html { height: 100%; }
+
+        /* ===== ASK BOT STYLES (unchanged, scoped to ask mode) ===== */
+        body.mode-ask {
+            margin: 0;
+            padding: 8px;
+            background-color: #f3f2f1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+        }
+        .chat-container {
+            width: 100%;
+            height: 100%;
+            background: #ffffff;
+            display: flex;
+            flex-direction: column;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            overflow: hidden;
+        }
+        .chat-header {
+            background-color: #5b2d90;
+            color: white;
+            padding: 16px;
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .chat-messages {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background-color: #faf9f8;
+        }
+        .message {
+            max-width: 85%;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 14px;
+            line-height: 1.4;
+            word-wrap: break-word;
+        }
+        .message.user {
+            background-color: #5b2d90;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+        .message.bot {
+            background-color: #f3f2f1;
+            color: #323130;
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+            border: 1px solid #edebe9;
+        }
+        .message.bot p { margin: 0 0 8px 0; }
+        .message.bot p:last-child { margin-bottom: 0; }
+        .message.bot strong { font-weight: 600; }
+        .chat-input-area {
+            padding: 12px;
+            background: #ffffff;
+            border-top: 1px solid #edebe9;
+            display: flex;
+            gap: 8px;
+        }
+        .chat-input-area input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #8a8886;
+            border-radius: 4px;
+            outline: none;
+            font-size: 14px;
+        }
+        .chat-input-area input:focus { border-color: #5b2d90; }
+        .chat-input-area button {
+            background-color: #5b2d90;
+            color: white;
+            border: none;
+            padding: 0 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .chat-input-area button:hover { background-color: #4a2477; }
+
+        /* ===== MODE SWITCH ===== */
+        body.mode-ask #teamsRoot { display: none !important; }
+        body.mode-teams #askRoot { display: none !important; }
+
+        /* ===== TEAMS STYLES ===== */
+        body.mode-teams { margin: 0; padding: 0; height: 100%; width: 100%; background: #fff; color: #242424; overflow: hidden; }
+        #teamsRoot button { font-family: inherit; }
+        .app { height: 100%; display: flex; flex-direction: column; }
+        .hidden { display: none !important; }
+        .title-wrap { padding: 8px 8px 4px; }
+        .title { display: flex; align-items: center; gap: 8px; border: 1px solid #242424; border-radius: 6px; padding: 6px 10px; font-size: 18px; font-weight: 600; }
+        .logo { width: 22px; height: 22px; border-radius: 5px; background: #5b5fc7; color: #fff; font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+        .tabs { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px 0; border-bottom: 1px solid #e0e0e0; }
+        .tab { padding: 6px 2px 8px; font-size: 14px; color: #5b5fc7; border-bottom: 3px solid #5b5fc7; font-weight: 600; }
+        .tools { display: flex; gap: 12px; padding-bottom: 6px; }
+        .icon-btn { border: none; background: transparent; cursor: pointer; padding: 4px; border-radius: 4px; color: #424242; display: flex; }
+        .icon-btn:hover { background: #f0f0f0; }
+        .icon-btn svg { width: 18px; height: 18px; fill: currentColor; }
+        .scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 14px 14px; }
+        .section-head { display: flex; align-items: center; gap: 6px; font-size: 14px; margin: 14px 0 8px; cursor: pointer; user-select: none; background: none; border: none; padding: 0; color: inherit; }
+        .section-head .arrow { font-size: 10px; }
+        .info { display: inline-flex; width: 14px; height: 14px; border: 1px solid #616161; border-radius: 50%; font-size: 9px; align-items: center; justify-content: center; color: #616161; }
+        .new-chat-wrap { display: flex; justify-content: center; margin: 10px 0 6px; }
+        .new-chat-btn { background: #5b5fc7; color: #fff; border: none; border-radius: 4px; padding: 10px 24px; font-size: 14px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px; box-shadow: 0 2px 4px rgba(0,0,0,.25); }
+        .new-chat-btn:hover { background: #4f52b2; }
+        .new-chat-btn svg { width: 16px; height: 16px; fill: #fff; }
+        .empty { font-size: 13px; color: #616161; padding: 8px 4px 8px 20px; }
+        .notice { font-size: 12px; color: #a4262c; text-align: center; min-height: 16px; margin-top: 4px; }
+        .chat-row { display: flex; gap: 10px; align-items: center; padding: 8px 6px; border-radius: 6px; cursor: pointer; }
+        .chat-row:hover { background: #f5f5f5; }
+        .avatar { width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; background: #e8ebfa; color: #3b3f8f; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+        .avatar.sm { width: 28px; height: 28px; flex-basis: 28px; font-size: 11px; }
+        .row-body { min-width: 0; flex: 1; }
+        .row-top { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+        .row-top b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .row-top span { font-size: 12px; color: #616161; flex: 0 0 auto; }
+        .row-sub { font-size: 12px; color: #616161; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-head { display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: #5b5fc7; color: #fff; }
+        .chat-head .icon-btn { color: #fff; }
+        .chat-head .icon-btn:hover { background: rgba(255,255,255,.18); }
+        .chat-head .avatar { background: #dcdef5; }
+        .chat-head strong { display: block; font-size: 15px; font-weight: 600; }
+        .chat-head span.sub { font-size: 12px; opacity: .9; }
+        .record-chip { padding: 8px 14px; background: #f0f1fb; border-bottom: 1px solid #e1e2f5; font-size: 12px; color: #3b3f8f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .messages { flex: 1; min-height: 0; overflow-y: auto; background: #f5f5f5; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+        .day { align-self: center; font-size: 11px; color: #616161; background: #e8e8e8; padding: 2px 10px; border-radius: 10px; }
+        .row { display: flex; gap: 8px; max-width: 92%; }
+        .row.me { align-self: flex-end; flex-direction: row-reverse; }
+        .meta { font-size: 11px; color: #616161; margin-bottom: 2px; }
+        .row.me .meta { text-align: right; }
+        .bubble { padding: 8px 12px; border-radius: 6px; font-size: 14px; line-height: 1.4; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.12); word-wrap: break-word; }
+        .row.me .bubble { background: #e8ebfa; }
+        .typing { font-size: 12px; color: #616161; font-style: italic; }
+        .compose { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #e0e0e0; background: #fff; }
+        .compose input { flex: 1; padding: 10px 12px; border: 1px solid #c8c8c8; border-bottom: 2px solid #8a8886; border-radius: 4px; outline: none; font-size: 14px; }
+        .compose input:focus { border-bottom-color: #5b5fc7; }
+        .compose button { background: #5b5fc7; color: #fff; border: none; border-radius: 4px; padding: 0 16px; font-weight: 600; cursor: pointer; }
+        .related { border-top: 1px solid #e0e0e0; max-height: 34%; display: flex; flex-direction: column; background: #fff; }
+        .related-head { width: 100%; display: flex; justify-content: space-between; padding: 8px 14px; border: none; background: #fafafa; font-size: 13px; font-weight: 600; cursor: pointer; text-align: left; }
+        .related ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; }
+        .related ul.collapsed { display: none; }
+        .related li { padding: 8px 14px; border-top: 1px solid #f0f0f0; font-size: 13px; cursor: pointer; display: flex; flex-direction: column; }
+        .related li:hover { background: #f0f1fb; }
+        .related li small { color: #616161; }
+    </style>
+</head>
+<body class="mode-ask">
+    <script>
+        /* Decide which view to show: the pane URL carries ?data=tab=ask or tab=teams */
+        (function () {
+            var tab = "ask";
+            try {
+                var d = new URLSearchParams(window.location.search).get("data") || "";
+                if (/tab=teams/i.test(decodeURIComponent(d))) { tab = "teams"; }
+            } catch (e) { console.warn("Could not read pane mode", e); }
+            document.body.className = "mode-" + tab;
+        })();
+    </script>
+
+    <!-- ================= ASK BOT (unchanged) ================= -->
+    <div id="askRoot" class="chat-container">
+        <div class="chat-header">
+            <span>Bitsquad SalesBot</span>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="message bot">Hello! How can I help you analyze your app data today?</div>
+        </div>
+
+        <div class="chat-input-area">
+            <input type="text" id="userInput" placeholder="Ask a question..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <!-- ================= TEAMS ================= -->
+    <div id="teamsRoot" class="app">
+
+        <!-- List view -->
+        <div id="listView" class="app">
+            <div class="title-wrap">
+                <div class="title"><div class="logo">T</div><span>Teams chats</span></div>
+            </div>
+            <div class="tabs">
+                <div class="tab">Chat</div>
+                <div class="tools">
+                    <button class="icon-btn" title="Filter" aria-label="Filter"><svg viewBox="0 0 24 24"><path d="M3 6h18v2H3V6zm4 5h10v2H7v-2zm3 5h4v2h-4v-2z"/></svg></button>
+                    <button class="icon-btn" title="New connected chat" aria-label="New chat" onclick="newConnectedChat()"><svg viewBox="0 0 24 24"><path d="M4 4h9v2H6v12h12v-7h2v9H4V4zm14.3-1.7 1.4 1.4-8.4 8.4-2 .6.6-2 8.4-8.4z"/></svg></button>
+                </div>
+            </div>
+            <div class="scroll">
+                <button class="section-head" onclick="toggleSection('connectedBox','arrowC')">
+                    <span class="arrow" id="arrowC">&#9660;</span>
+                    <span>Chats connected to this <span id="entityLabel">record</span></span>
+                    <span class="info" title="Chats linked to the open record">i</span>
+                </button>
+                <div id="connectedBox">
+                    <div class="new-chat-wrap">
+                        <button class="new-chat-btn" onclick="newConnectedChat()">
+                            <svg viewBox="0 0 24 24"><path d="M10.6 13.4a1 1 0 0 1 0-1.4l3-3a3.5 3.5 0 0 1 5 5l-2 2-1.4-1.4 2-2a1.5 1.5 0 0 0-2.2-2.2l-3 3a1 1 0 0 1-1.4 0zM13.4 10.6a1 1 0 0 1 0 1.4l-3 3a3.5 3.5 0 0 1-5-5l2-2 1.4 1.4-2 2a1.5 1.5 0 0 0 2.2 2.2l3-3a1 1 0 0 1 1.4 0z"/></svg>
+                            New connected chat
+                        </button>
+                    </div>
+                    <div class="notice" id="notice"></div>
+                    <div id="connectedList"></div>
+                </div>
+
+                <button class="section-head" onclick="toggleSection('otherBox','arrowO')">
+                    <span class="arrow" id="arrowO">&#9660;</span>
+                    <span>Other chats</span>
+                    <span class="info" title="Chats linked to other records">i</span>
+                </button>
+                <div id="otherBox"><div id="otherList"></div></div>
+            </div>
+        </div>
+
+        <!-- Chat view -->
+        <div id="chatView" class="app hidden">
+            <div class="chat-head">
+                <button class="icon-btn" title="Back" aria-label="Back" onclick="showList()"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:#fff"><path d="M20 11H7.8l5.6-5.6L12 4l-8 8 8 8 1.4-1.4L7.8 13H20z"/></svg></button>
+                <div class="avatar" id="chatAvatar">RO</div>
+                <div><strong id="chatName">Record Owner</strong><span class="sub">Record owner</span></div>
+            </div>
+            <div class="record-chip">Linked record: <b id="chatRecord">-</b></div>
+            <div class="messages" id="messages"></div>
+            <div class="compose">
+                <input type="text" id="msgInput" placeholder="Type a message" onkeypress="if(event.key==='Enter')sendMsg()">
+                <button onclick="sendMsg()">Send</button>
+            </div>
+            <div class="related" id="relatedBox">
+                <button class="related-head" onclick="toggleRelated()">
+                    <span>Related records (<span id="relCount">0</span>)</span><span id="relArrow">&#9662;</span>
+                </button>
+                <ul id="relList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* ================= ASK BOT LOGIC (unchanged) ================= */
+        const API_KEY = "API_KEY"; 
+
+        async function sendMessage() {
+            const inputField = document.getElementById('userInput');
+            const messageText = inputField.value.trim();
+            if (!messageText) return;
+
+            appendMessage(messageText, 'user', false);
+            inputField.value = '';
+
+            const loadingId = appendMessage("Thinking...", 'bot', false);
+
+            try {
+                const savedFormJson = localStorage.getItem("currentFormRecordData");
+                let contextPrompt = "";
+                
+                if (savedFormJson) {
+                    contextPrompt = `\n\n[Context: Here is the data of the currently open form in the CRM app: ${savedFormJson}]`;
+                }
+
+                const finalPrompt = messageText + contextPrompt;
+
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${API_KEY}`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{ text: finalPrompt }]
+                        }]
+                    })
+                });
+
+                const data = await response.json();
+                
+                let botReply = "Sorry, I couldn't get a response.";
+                if (data.candidates && data.candidates[0].content.parts[0].text) {
+                    botReply = data.candidates[0].content.parts[0].text;
+                }
+
+                updateMessage(loadingId, botReply);
+
+            } catch (error) {
+                updateMessage(loadingId, "Error connecting to AI service.");
+                console.error(error);
+            }
+        }
+
+        function appendMessage(text, sender, isMarkdown = false) {
+            const chatMessages = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            if (isMarkdown && sender === 'bot') {
+                messageDiv.innerHTML = marked.parse(text);
+            } else {
+                messageDiv.textContent = text;
+            }
+
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            return messageDiv;
+        }
+
+        function updateMessage(messageElement, newText) {
+            // Render markdown so *, # symbols convert into clean formatting
+            messageElement.innerHTML = marked.parse(newText);
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        /* ================= TEAMS LOGIC ================= */
+        var ctx = null;      // open record context written by the command bar JS
+        var current = null;  // chat currently open
+        var REPLIES = [
+            "Thanks for the update. I'll check this record and get back to you.",
+            "Got it. Can you share the latest details on this?",
+            "Sure, I'm looking at it now.",
+            "Noted. Let's discuss this in today's sync.",
+            "Good point. I'll update the record shortly."
+        ];
+
+        function sget(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+        function sset(k, v) { try { localStorage.setItem(k, v); } catch (e) { console.warn("Storage unavailable", e); } }
+        function sjson(k, fb) { try { var r = sget(k); return r ? JSON.parse(r) : fb; } catch (e) { return fb; } }
+        function getIndex() { var i = sjson("bssTeamsIndex", []); return Array.isArray(i) ? i : []; }
+        function saveIndex(l) { sset("bssTeamsIndex", JSON.stringify(l)); }
+        function getMsgs(rid) { var m = sjson("bssTeamsChat_" + rid, []); return Array.isArray(m) ? m : []; }
+        function saveMsgs(rid, l) { sset("bssTeamsChat_" + rid, JSON.stringify(l.slice(-100))); }
+        function initials(n) { return String(n || "?").trim().split(/\s+/).slice(0, 2).map(function (p) { return p.charAt(0).toUpperCase(); }).join("") || "?"; }
+        function fmtTime(ts) {
+            var d = new Date(ts), n = new Date();
+            return d.toDateString() === n.toDateString() ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (d.getMonth() + 1) + "/" + d.getDate();
+        }
+
+        function loadContext() {
+            ctx = sjson("bssTeamsContext", null);
+            document.getElementById('entityLabel').textContent = (ctx && ctx.entityName) ? ctx.entityName : "record";
+            document.getElementById('notice').textContent = "";
+            renderList();
+            if (current) { renderRelated(); }
+        }
+
+        function buildRow(entry) {
+            var row = document.createElement('div'); row.className = 'chat-row';
+            var av = document.createElement('div'); av.className = 'avatar'; av.textContent = initials(entry.ownerName);
+            var body = document.createElement('div'); body.className = 'row-body';
+            var top = document.createElement('div'); top.className = 'row-top';
+            var b = document.createElement('b'); b.textContent = entry.ownerName || "Record Owner";
+            var t = document.createElement('span'); t.textContent = entry.ts ? fmtTime(entry.ts) : "";
+            top.appendChild(b); top.appendChild(t);
+            var sub = document.createElement('div'); sub.className = 'row-sub';
+            sub.textContent = entry.last ? entry.last : ((entry.entityName || "record") + " - " + (entry.recordName || "Untitled"));
+            body.appendChild(top); body.appendChild(sub);
+            row.appendChild(av); row.appendChild(body);
+            row.onclick = function () { openChat(entry.recordId); };
+            return row;
+        }
+
+        function fillList(id, items, emptyText) {
+            var box = document.getElementById(id);
+            box.innerHTML = "";
+            if (!items.length) {
+                var d = document.createElement('div'); d.className = 'empty'; d.textContent = emptyText; box.appendChild(d); return;
+            }
+            items.forEach(function (e) { box.appendChild(buildRow(e)); });
+        }
+
+        function renderList() {
+            var idx = getIndex();
+            var cid = ctx && ctx.recordId;
+            var connected = idx.filter(function (e) { return cid && e.recordId === cid; });
+            var others = idx.filter(function (e) { return !cid || e.recordId !== cid; })
+                            .sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
+            fillList('connectedList', connected, cid ? "No connected chats yet. Start one with the owner of this record." : "Open a record to see its connected chats.");
+            fillList('otherList', others, "No other chats");
+        }
+
+        function toggleSection(boxId, arrowId) {
+            var hide = document.getElementById(boxId).classList.toggle('hidden');
+            document.getElementById(arrowId).innerHTML = hide ? '&#9654;' : '&#9660;';
+        }
+
+        function newConnectedChat() {
+            var notice = document.getElementById('notice');
+            notice.textContent = "";
+            if (!ctx || !ctx.recordId) { notice.textContent = "Open a record first to start a connected chat."; return; }
+            var idx = getIndex();
+            var found = idx.filter(function (e) { return e.recordId === ctx.recordId; })[0];
+            if (!found) {
+                idx.push({ recordId: ctx.recordId, entityName: ctx.entityName, recordName: ctx.recordName,
+                           ownerName: ctx.ownerName || "Record Owner", last: "", ts: Date.now() });
+                saveIndex(idx);
+            }
+            openChat(ctx.recordId);
+        }
+
+        function showList() {
+            current = null;
+            document.getElementById('chatView').classList.add('hidden');
+            document.getElementById('listView').classList.remove('hidden');
+            renderList();
+        }
+
+        function openChat(recordId) {
+            var entry = getIndex().filter(function (e) { return e.recordId === recordId; })[0];
+            if (!entry) return;
+            current = entry;
+            document.getElementById('listView').classList.add('hidden');
+            document.getElementById('chatView').classList.remove('hidden');
+            document.getElementById('chatAvatar').textContent = initials(entry.ownerName);
+            document.getElementById('chatName').textContent = entry.ownerName || "Record Owner";
+            document.getElementById('chatRecord').textContent = (entry.entityName || "record") + " - " + (entry.recordName || "Untitled");
+            renderMessages();
+            renderRelated();
+        }
+
+        function renderMessages() {
+            var box = document.getElementById('messages');
+            box.innerHTML = "";
+            var d = document.createElement('div'); d.className = 'day'; d.textContent = 'Today'; box.appendChild(d);
+            var list = getMsgs(current.recordId);
+            if (!list.length) {
+                var h = document.createElement('div'); h.className = 'day';
+                h.textContent = 'Say hi to ' + (current.ownerName || "the record owner"); box.appendChild(h);
+            }
+            list.forEach(function (m) {
+                var me = m.from === 'me';
+                var row = document.createElement('div'); row.className = 'row' + (me ? ' me' : '');
+                if (!me) { var av = document.createElement('div'); av.className = 'avatar sm'; av.textContent = initials(current.ownerName); row.appendChild(av); }
+                var body = document.createElement('div');
+                var meta = document.createElement('div'); meta.className = 'meta';
+                meta.textContent = (me ? 'You' : current.ownerName) + '  ' + fmtTime(m.ts);
+                var bub = document.createElement('div'); bub.className = 'bubble'; bub.textContent = m.text;
+                body.appendChild(meta); body.appendChild(bub); row.appendChild(body); box.appendChild(row);
+            });
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function touchEntry(rid, text) {
+            var idx = getIndex();
+            idx.forEach(function (e) { if (e.recordId === rid) { e.last = text; e.ts = Date.now(); } });
+            saveIndex(idx);
+        }
+
+        function sendMsg() {
+            if (!current) return;
+            var input = document.getElementById('msgInput');
+            var text = input.value.trim();
+            if (!text) return;
+            input.value = '';
+            var rid = current.recordId;
+            var list = getMsgs(rid);
+            list.push({ from: 'me', text: text, ts: Date.now() });
+            saveMsgs(rid, list);
+            touchEntry(rid, "You: " + text);
+            renderMessages();
+
+            var box = document.getElementById('messages');
+            var typing = document.createElement('div'); typing.className = 'typing';
+            typing.textContent = (current.ownerName || "Owner") + ' is typing...';
+            box.appendChild(typing); box.scrollTop = box.scrollHeight;
+
+            setTimeout(function () {
+                var reply = REPLIES[Math.floor(Math.random() * REPLIES.length)];
+                var l = getMsgs(rid);
+                l.push({ from: 'owner', text: reply, ts: Date.now() });
+                saveMsgs(rid, l);
+                touchEntry(rid, reply);
+                if (current && current.recordId === rid) renderMessages();
+            }, 1300);
+        }
+
+        function renderRelated() {
+            var box = document.getElementById('relatedBox');
+            var ul = document.getElementById('relList');
+            ul.innerHTML = "";
+            var isCurrent = ctx && current && ctx.recordId === current.recordId;
+            if (!isCurrent) { box.classList.add('hidden'); return; }
+            box.classList.remove('hidden');
+            var items = Array.isArray(ctx.related) ? ctx.related : [];
+            document.getElementById('relCount').textContent = items.length;
+            if (!items.length) {
+                var li = document.createElement('li'); li.style.cursor = 'default'; li.textContent = 'No related records found'; ul.appendChild(li); return;
+            }
+            items.forEach(function (it) {
+                var li = document.createElement('li');
+                var s = document.createElement('span'); s.textContent = it.title || 'Untitled';
+                var sm = document.createElement('small'); sm.textContent = it.type || '';
+                li.appendChild(s); li.appendChild(sm);
+                li.onclick = function () {
+                    try { if (it.id && it.type && window.parent && window.parent.Xrm) window.parent.Xrm.Navigation.openForm({ entityName: it.type, entityId: it.id }); }
+                    catch (e) { console.warn("Could not open record", e); }
+                };
+                ul.appendChild(li);
+            });
+        }
+
+        function toggleRelated() {
+            var collapsed = document.getElementById('relList').classList.toggle('collapsed');
+            document.getElementById('relArrow').innerHTML = collapsed ? '&#9656;' : '&#9662;';
+        }
+
+        /* Live refresh when a command bar button writes a new record context */
+        window.addEventListener('storage', function (e) { if (e.key === 'bssTeamsContext') loadContext(); });
+        loadContext();
+    </script>
+</body>
+</html>
