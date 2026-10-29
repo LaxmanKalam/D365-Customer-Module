@@ -71,7 +71,6 @@ The project uses custom Dataverse tables and client-side scripting to implement 
 | `SLA_Timings.js`             | Calculates SLA deadlines based on Account plans and Case priority.                              |
 | `SLA_Item.js`                | Creates an SLA Item and links it to the related Case.                                           |
 | `TeamsAndChatWindow.js`      | Manages the Copilot Assistant and Teams chat side panels.                                       |
-|------------------------------|-------------------------------------------------------------------------------------------------|
 
 ## Learning Outcomes
 
