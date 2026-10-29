@@ -1,0 +1,162 @@
+using System;
+using Microsoft.Xrm.Sdk;
+using Microsoft.Xrm.Sdk.Query;
+using Microsoft.Crm.Sdk.Messages;
+
+namespace Bitsquad.CustomerService.Plugins
+{
+    public class ResolveCasePlugin : IPlugin
+    {
+        public void Execute(IServiceProvider serviceProvider)
+        {
+            var context = (IPluginExecutionContext)
+                serviceProvider.GetService(typeof(IPluginExecutionContext));
+
+            var tracing = (ITracingService)
+                serviceProvider.GetService(typeof(ITracingService));
+
+            var serviceFactory = (IOrganizationServiceFactory)
+                serviceProvider.GetService(
+                    typeof(IOrganizationServiceFactory));
+
+            var service = serviceFactory.CreateOrganizationService(
+                context.UserId);
+
+            try
+            {
+                tracing.Trace("ResolveCasePlugin started.");
+
+                if (!context.InputParameters.Contains("Target") ||
+                    !(context.InputParameters["Target"] is EntityReference))
+                {
+                    throw new InvalidPluginExecutionException(
+                        "A Case record must be provided.");
+                }
+
+                var caseReference =
+                    (EntityReference)context.InputParameters["Target"];
+
+                if (caseReference.LogicalName != "bss_case")
+                {
+                    throw new InvalidPluginExecutionException(
+                        "This operation only supports Case records.");
+                }
+
+                tracing.Trace("Case ID: {0}", caseReference.Id);
+
+                var caseRecord = service.Retrieve(
+                    "bss_case",
+                    caseReference.Id,
+                    new ColumnSet(
+                        "statecode",
+                        "bss_status",
+                        "bss_customerid"));
+
+                var state = caseRecord.GetAttributeValue<OptionSetValue>(
+                    "statecode");
+
+                tracing.Trace(
+                    "Current system statecode: {0}",
+                    state == null ? "NULL" : state.Value.ToString());
+
+                if (state == null || state.Value != 0)
+                {
+                    throw new InvalidPluginExecutionException(
+                        "Only an Active Case can be resolved. " +
+                        "Current system statecode: " +
+                        (state == null ? "NULL" : state.Value.ToString()));
+                }
+
+                var customer = caseRecord.GetAttributeValue<EntityReference>(
+                    "bss_customerid");
+
+                if (customer == null)
+                {
+                    throw new InvalidPluginExecutionException(
+                        "Please select a Customer before resolving the Case.");
+                }
+
+                var customerRecord = service.Retrieve(
+    customer.LogicalName,
+    customer.Id,
+    new ColumnSet(
+        customer.LogicalName == "bss_accounts"
+            ? "bss_accountname"
+            : "bss_fullname"
+    )
+);
+
+string customerName =
+    customer.LogicalName == "bss_accounts"
+        ? customerRecord.GetAttributeValue<string>("bss_accountname")
+        : customerRecord.GetAttributeValue<string>("bss_fullname");
+
+if (string.IsNullOrWhiteSpace(customerName))
+{
+    customerName = "Case Resolved";
+}
+
+                tracing.Trace("Customer name: {0}", customerName);
+
+                // Update the custom Case status fields.
+                var caseUpdate = new Entity(
+                    "bss_case",
+                    caseReference.Id);
+
+                caseUpdate["bss_status"] = new OptionSetValue(2);
+                caseUpdate["bss_statusreason"] = new OptionSetValue(5);
+
+                service.Update(caseUpdate);
+
+                tracing.Trace("Custom Case status fields updated.");
+
+                // Create the Case Resolution record.
+                var resolution = new Entity("bss_caseresolution");
+
+                resolution["bss_subject"] = customerName;
+                resolution["bss_case"] = caseReference;
+                resolution["bss_resolutiondate"] = DateTime.UtcNow;
+
+                // Confirmed choice: Problem Solved = 1.
+                resolution["bss_resolutiontype"] = new OptionSetValue(1);
+
+                resolution["bss_resolutiondescription"] =
+                    "Case resolved successfully. Problem Solved.";
+
+                var resolutionId = service.Create(resolution);
+
+                tracing.Trace(
+                    "Case Resolution created: {0}",
+                    resolutionId);
+
+                // Set the Case system state to Inactive.
+                var setStateRequest = new SetStateRequest
+                {
+                    EntityMoniker = caseReference,
+                    State = new OptionSetValue(1),
+                    Status = new OptionSetValue(2)
+                };
+
+                service.Execute(setStateRequest);
+
+                tracing.Trace(
+                    "Case {0} marked Inactive successfully.",
+                    caseReference.Id);
+            }
+            catch (InvalidPluginExecutionException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                tracing.Trace(
+                    "ResolveCasePlugin exception: {0}",
+                    ex.ToString());
+
+                throw new InvalidPluginExecutionException(
+                    "Resolve Case failed: " + ex.Message,
+                    ex);
+            }
+        }
+    }
+}
